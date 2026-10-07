@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security x Inventário | SPX BR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--or:#EE4D2D;--or2:#FF7337;--bg:#F5F5F5;--mu:#757575;--bd:#E8E8E8;--ok:#26AA99;--bad:#D0011B}
+*{box-sizing:border-box}body{margin:0;font:14px Roboto,Arial,sans-serif;background:var(--bg);color:#222}
+header{background:linear-gradient(90deg,var(--or),var(--or2));color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header h1{margin:0;font-size:17px}header small{opacity:.9}
+select,input,button{font:inherit}
+header select{border:0;border-radius:4px;padding:5px 8px}
+nav{display:flex;background:#fff;border-bottom:1px solid var(--bd);overflow-x:auto;position:sticky;top:0;z-index:5}
+nav button{border:0;background:none;padding:13px 16px;cursor:pointer;color:var(--mu);border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{color:var(--or);border-color:var(--or);font-weight:700}
+main{padding:16px;max-width:1240px;margin:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.k{background:#fff;border-radius:6px;padding:12px;border-left:4px solid var(--or);box-shadow:0 1px 3px #0001}
+.k span{font-size:11px;color:var(--mu);display:block}.k b{font-size:21px;color:var(--or)}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:12px}
+.c{background:#fff;border-radius:6px;padding:12px;box-shadow:0 1px 3px #0001;overflow-x:auto}
+.c h3{margin:0 0 8px;font-size:13px}canvas{max-height:230px}
+.bar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.bar input{flex:1;min-width:160px;padding:8px;border:1px solid var(--bd);border-radius:4px}
+.btn{background:var(--or);color:#fff;border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
+.btn.s{background:#fff;color:var(--or);border:1px solid var(--or)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:#FFF3EF;color:var(--or);text-align:left;padding:7px;position:sticky;top:0}td{padding:7px;border-bottom:1px solid var(--bd)}
+.tag{padding:2px 8px;border-radius:10px;font-size:11px;background:#FFE8E1;color:var(--or)}.tag.r{background:#FDECEE;color:var(--bad)}
+.al{padding:9px 11px;border-radius:6px;margin-bottom:6px;font-size:12.5px}
+.al.r{background:#FDECEE;color:var(--bad);border-left:4px solid var(--bad)}.al.o{background:#FFF3EF;color:#B33A1F;border-left:4px solid var(--or)}.al.g{background:#E6F6F3;color:var(--ok);border-left:4px solid var(--ok)}
+.flow{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px}.flow i{background:var(--or);color:#fff;padding:5px 9px;border-radius:12px;font-style:normal}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px;font-size:12.5px}.roles ul{margin:4px 0 0;padding-left:18px;line-height:1.5}
+#ov{display:none;position:fixed;inset:0;background:#0006;z-index:9;align-items:center;justify-content:center}
+#ov.on{display:flex}#fm{background:#fff;border-radius:8px;padding:18px;width:min(420px,94vw);max-height:90vh;overflow:auto}
+#fm h3{margin:0 0 10px;color:var(--or)}#fm label{display:block;font-size:12px;color:var(--mu);margin-top:8px}
+#fm input,#fm select{width:100%;padding:8px;border:1px solid var(--bd);border-radius:4px}
+#tt{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:20px;display:none;z-index:99}
+</style></head><body>
+<header><h1>📦 Security x Inventário · SPX BR</h1>
+<div><select id="per" onchange="P=+this.value;draw()"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option><option value="0">Tudo</option></select>
+<small id="upd"> Carregando…</small></div></header>
+<nav id="nav"></nav><main id="m"></main>
+<div id="ov"><form id="fm" onsubmit="return env(event)"></form></div><div id="tt"></div>
+<script>
+const $=i=>document.getElementById(i),TABS=['Dashboard','Avarias','OB_Picking','Descarte','Ajustes_CC'],
+NM={Dashboard:'📊 Dashboard',Avarias:'⚠️ Avarias',OB_Picking:'🔎 OB Picking',Descarte:'🗑️ Descarte',Ajustes_CC:'🔁 Ajustes CC'},
+PAL=['#EE4D2D','#FF7337','#FFB199','#26AA99','#4A90D9','#9B9B9B'];
+let D,P=30,TAB='Dashboard',Q='',CH={};
+const brl=n=>'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const sum=(a,f)=>a.reduce((s,x)=>s+(+x[f]||0),0),
+grp=(a,f,v)=>a.reduce((m,x)=>(m[x[f]]=(m[x[f]]||0)+(v?+x[v]||0:1),m),{}),
+iso=d=>d.toISOString().slice(0,10),
+mon=s=>{const d=new Date(s+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);return iso(d)},
+esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
+dt=r=>r.Data||r.Semana_Inicio||'',
+fil=a=>{if(!P)return a;const c=new Date();c.setDate(c.getDate()-P);const k=iso(c);return a.filter(r=>dt(r)>=k)},
+toast=t=>{const e=$('tt');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2500)};
+$('nav').innerHTML=TABS.map(t=>`<button id="n_${t}" onclick="go('${t}')">${NM[t]}</button>`).join('');
+function go(t){TAB=t;Q='';TABS.forEach(x=>$('n_'+x).classList.toggle('on',x===t));draw()}
+function load(){google.script.run.withSuccessHandler(d=>{D=d;$('upd').textContent=' · '+d.atualizado;draw()})
+ .withFailureHandler(e=>$('upd').textContent=' Erro: '+e.message).getData()}
+function draw(){if(!D)return;TAB==='Dashboard'?dash():lista(TAB)}
+function ch(id,type,lb,ds,o){if(CH[id])CH[id].destroy();CH[id]=new Chart($(id),{type,data:{labels:lb,datasets:ds},options:Object.assign({responsive:true,plugins:{legend:{display:ds.length>1||type==='doughnut',labels:{boxWidth:10}}}},o||{})})}
+const card=(id,t)=>`<div class="c"><h3>${t}</h3><canvas id="${id}"></canvas></div>`;
+
+function dash(){
+ const av=fil(D.Avarias),ob=fil(D.OB_Picking),ds=fil(D.Descarte),cc=fil(D.Ajustes_CC),W={};
+ const w=k=>W[k]=W[k]||{v:0,q:0,aj:0,dv:0};
+ av.forEach(a=>{const x=w(mon(a.Data));x.v+=+a.Valor||0;x.q+=+a.Qtd||0});
+ cc.forEach(c=>{const x=w(mon(c.Semana_Inicio));x.aj+=+c.Ajustes_Inventario||0;x.dv+=+c.Divergencias_CC||0});
+ const ws=Object.keys(W).sort(),al=[];
+ for(let i=1;i<ws.length;i++){const a=W[ws[i-1]],b=W[ws[i]];if(b.q<a.q&&b.dv>a.dv)al.push(['r',`Semana ${ws[i]}: avarias caíram (${a.q}→${b.q}) e divergências de CC subiram (${a.dv}→${b.dv}). Possível avaria não registrada.`])}
+ const ab=av.filter(a=>a.Etapa!=='Concluído'),lim=new Date();lim.setDate(lim.getDate()-7);
+ const par=ab.filter(a=>a.Atualizado_Em&&a.Atualizado_Em<iso(lim)).length,dv=ab.filter(a=>a.Indicio_Desvio==='Sim').length;
+ if(dv)al.push(['r',`${dv} avaria(s) com indício de desvio ainda não concluída(s).`]);
+ if(par)al.push(['o',`${par} avaria(s) paradas há mais de 7 dias na mesma etapa.`]);
+ const ov=ob.filter(o=>o.OB_Verdadeiro==='Sim'),ok=ov.filter(o=>o.Busca_Correta==='Sim').length,
+ bad=ov.filter(o=>o.Busca_Correta!=='Sim');
+ if(bad.length)al.push(['o',`${bad.length} OB(s) verdadeiro(s) com busca incorreta/pendente — revisar endereços na aba OB Picking.`]);
+ const K=[['Perda avarias',brl(sum(av,'Valor'))],['Perda descarte',brl(sum(ds,'Valor_Perda'))],['Avarias em aberto',ab.length],['Indícios de desvio',dv],['Busca correta (OB)',ov.length?Math.round(ok/ov.length*100)+'%':'—'],['Alertas',al.length]];
+ $('m').innerHTML=`<div class="kpis">${K.map(k=>`<div class="k"><span>${k[0]}</span><b>${k[1]}</b></div>`).join('')}</div>
+ <div class="c" style="margin-bottom:10px"><h3>Alertas</h3>${al.length?al.map(a=>`<div class="al ${a[0]}">${a[0]==='r'?'🚨':'⚠️'} ${a[1]}</div>`).join(''):'<div class="al g">✅ Sem alertas no período.</div>'}</div>
+ <div class="g">${card('a','Perda por avaria (R$) / semana')}${card('b','Avarias por origem (R$)')}${card('c','Funil do fluxo')}${card('d','Avarias x Ajustes x Divergências CC')}</div>
+ <div class="g">${card('e','Top SKUs com OB verdadeiro')}${card('f','Qualidade da busca (OB)')}${card('g','Descarte: perda por origem (R$)')}${card('h','Descarte: status dos produtos')}</div>
+ <div class="c"><h3>Fluxo conjunto</h3><div class="flow"><i>Security identifica</i>→<i>Analisa</i>→<i>Valida</i>→<i>Direciona</i>→<i>Inventário trata</i>→<i>Conclui</i>→<i>Security acompanha</i></div>
+ <div class="roles"><div><b style="color:var(--or)">Security</b><ul><li>Identifica avarias (help button) e coleta evidências</li><li>Análise inicial e indícios de desvio/extravio</li><li>Direciona ao Inventário e acompanha a conclusão</li><li>Mapeia recorrências e padrões</li></ul></div>
+ <div><b style="color:var(--or)">Inventário</b><ul><li>Recebe avarias validadas</li><li>Registra/ajusta conforme fluxo e define a tratativa</li><li>Regulariza no sistema</li><li>Retorna status/conclusão ao Security</li></ul></div></div></div>`;
+ const E=D.cfg.ETAPAS,t=Object.entries(grp(ov,'SKU')).sort((a,b)=>b[1]-a[1]).slice(0,8);
+ ch('a','bar',ws,[{label:'R$',data:ws.map(k=>W[k].v),backgroundColor:PAL[0]}]);
+ const o=grp(av,'Origem_Avaria','Valor');ch('b','doughnut',Object.keys(o),[{data:Object.values(o),backgroundColor:PAL}]);
+ const e=grp(av,'Etapa');ch('c','bar',E,[{label:'Avarias',data:E.map(x=>e[x]||0),backgroundColor:PAL[0]}]);
+ ch('d','line',ws,[['Avarias (qtd)','q',PAL[0]],['Ajustes','aj',PAL[4]],['Divergências CC','dv',PAL[3]]].map(s=>({label:s[0],data:ws.map(k=>W[k][s[1]]),borderColor:s[2],backgroundColor:s[2]})));
+ ch('e','bar',t.map(x=>x[0]),[{label:'OBs',data:t.map(x=>x[1]),backgroundColor:PAL[0]}],{indexAxis:'y'});
+ const f=grp(ov,'Busca_Correta');ch('f','doughnut',Object.keys(f),[{data:Object.values(f),backgroundColor:PAL}]);
+ const g=grp(ds,'Origem','Valor_Perda');ch('g','bar',Object.keys(g),[{label:'R$',data:Object.values(g),backgroundColor:PAL[0]}]);
+ const h=grp(ds,'Status_Produto');ch('h','doughnut',Object.keys(h),[{data:Object.values(h),backgroundColor:PAL}]);
+}
+
+const cols=a=>D.cfg.SCH[a].filter(h=>h!=='ID'&&h!=='Atualizado_Em'),
+rows=a=>fil(D[a]).filter(r=>!Q||JSON.stringify(r).toLowerCase().includes(Q)).sort((x,y)=>dt(y).localeCompare(dt(x))).slice(0,300);
+function lista(a){
+ $('m').innerHTML=`<div class="bar"><input placeholder="Buscar…" oninput="Q=this.value.toLowerCase();corpo('${a}')"><button class="btn s" onclick="csv('${a}')">⬇ CSV</button><button class="btn" onclick="novo('${a}')">+ Novo</button></div><div class="c"><div id="tb"></div></div>`;corpo(a)}
+function cel(a,h,r){const v=r[h];
+ if(a==='Avarias'&&h==='Etapa')return `<select onchange="etapa('${r.ID}',this.value)">${D.cfg.ETAPAS.map(x=>`<option${x===v?' selected':''}>${x}</option>`).join('')}</select>`;
+ if(/^Valor/.test(h))return brl(v);
+ if(h==='Indicio_Desvio'||h==='Busca_Correta'||h==='Status_Produto')return `<span class="tag${v==='Sim'&&h==='Indicio_Desvio'||v==='Nao'&&h==='Busca_Correta'?' r':''}">${esc(v)}</span>`;
+ return esc(v)}
+function corpo(a){const R=rows(a),c=cols(a);
+ $('tb').innerHTML=R.length?`<table><tr>${c.map(h=>`<th>${h.replace(/_/g,' ')}</th>`).join('')}</tr>${R.map(r=>`<tr>${c.map(h=>`<td>${cel(a,h,r)}</td>`).join('')}</tr>`).join('')}</table>`:'<p style="color:#757575">Sem registros no período.</p>'}
+function etapa(id,v){google.script.run.withSuccessHandler(()=>{toast('Etapa atualizada');load()}).withFailureHandler(e=>toast(e.message)).setEtapa(id,v)}
+function csv(a){const c=cols(a),R=rows(a),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+ const t=[c.join(';')].concat(R.map(r=>c.map(h=>q(r[h])).join(';'))).join('\n'),l=document.createElement('a');
+ l.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));l.download=a+'.csv';l.click()}
+function novo(a){const L=D.cfg.LISTAS[a]||{};$('fm').dataset.a=a;
+ $('fm').innerHTML=`<h3>Novo registro · ${a.replace(/_/g,' ')}</h3>`+cols(a).map(h=>{
+  const lb=`<label>${h.replace(/_/g,' ')}</label>`;
+  if(L[h])return lb+`<select name="${h}">${L[h].map(x=>`<option>${x}</option>`).join('')}</select>`;
+  if(/^(Data|Semana)/.test(h))return lb+`<input type="date" name="${h}" value="${iso(new Date())}" required>`;
+  if(/^(Qtd|Valor|Ajustes|Diverg)/.test(h))return lb+`<input type="number" step="any" min="0" name="${h}" required>`;
+  return lb+`<input name="${h}" maxlength="500"${h==='Obs'?'':' required'}>`}).join('')+
+ `<div class="bar" style="margin:14px 0 0;justify-content:flex-end"><button type="button" class="btn s" onclick="$('ov').classList.remove('on')">Cancelar</button><button class="btn" id="sv">Salvar</button></div>`;
+ $('ov').classList.add('on')}
+function env(ev){ev.preventDefault();const f=$('fm'),o={};new FormData(f).forEach((v,k)=>o[k]=v);$('sv').disabled=true;
+ google.script.run.withSuccessHandler(()=>{$('ov').classList.remove('on');toast('Registro salvo');load()})
+ .withFailureHandler(e=>{$('sv').disabled=false;toast(e.message)}).salvar(f.dataset.a,o);return false}
+go('Dashboard');load();
+</script></body></html>
